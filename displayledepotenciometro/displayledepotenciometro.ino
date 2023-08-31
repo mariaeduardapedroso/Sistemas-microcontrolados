@@ -16,7 +16,6 @@ int analogPin = A3;
 
 int val = 0;
 int cont = 0;
-int tempo = 0;
 int unidade, dezena;
 
 int display[10][7] = {
@@ -50,16 +49,6 @@ void loop() {
   Serial.println(val);
   //definir escala de 0 a 99
   cont =  map(val, 0, 1023, 0, 99);
-
-  tempo++;
-  if (tempo == 100) {
-    tempo = 0;
-  }
-
-
-  if (cont > 99) {
-    cont = 0;
-  }
 
   dezena = cont / 10;
   unidade = cont % 10;

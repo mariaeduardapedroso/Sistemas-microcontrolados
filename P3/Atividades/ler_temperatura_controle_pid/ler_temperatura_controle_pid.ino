@@ -67,44 +67,64 @@ void setup() {
 
 }
 
-float T1;
-void loop() {
-  Serial.print("\nRequerimento de temperatrura");
-  sensors.requestTemperatures();
+//float T, erro, Kp;
+//float Ki, saida, saidaAnterior;
 
-  Serial.print("\nValor da temperatrura: ");
+float T1, T2, Pi;
+void loop() {
+
+  sensors.requestTemperatures();//requerimento da temperatura
+
+  Serial.print("\nValor-da-temperatrura:");
   cont = sensors.getTempCByIndex(0);
-  Serial.println(cont);
+  Serial.print(cont);
+  Serial.print(",");
 
   dezena = cont / 10;
   unidade = int(cont) % 10;
 
-  T1=controleProporcional(cont, 40, 12.8);
-  analogWrite(port_aquecedor, T1);
-  Serial.println(T1);
-  
+  T1 = controleProporcional(cont, 40, 12.8);
+  //  analogWrite(port_aquecedor, T1);
+  Serial.print("Saida-Proporcional:");
+  Serial.print(T1);
+  Serial.print(",");
+
+  T2 = controleIntegral(cont, 40, 0.5, 0.1);
+  //  analogWrite(port_aquecedor, T2);
+  Serial.print("Saida-Integrador:");
+  Serial.print(T2);
+  Serial.print(",");
+
+  Pi = T1 + T2;
+
+  Serial.print("Saida-Proporcional-Integrador:");
+  Serial.println(Pi);
+
+  analogWrite(port_aquecedor, Pi);
 
 }
-float controleProporcional(float temperatura, float tempIdeal, float Kp){
-  //
-  float T,erro;
+
+float controleProporcional(float temperatura, float tempIdeal, float Kp) {
+  float T, erro;
 
   erro = tempIdeal - temperatura;
-  T = erro*Kp;
+  T = erro * Kp;
 
   return T;
 }
 
-float controleProporcionalIntegral(float temperatura, float tempIdeal, float Kp, float Ki){
-  //
-  float T,erro,anterior;
+float saida = 0;
+float controleIntegral(float temperatura, float tempIdeal, float Ki, float T) {
+  float saidaAnterior;
 
-  anterior = erro;
-  erro = tempIdeal - temperatura;
-  T = erro*Kp;
+  saidaAnterior = saida; // Valor inicial
 
-  return T;
+  saida = saidaAnterior + Ki * T * (tempIdeal - temperatura);
+
+  return saida;
 }
+
+
 //interrupção do TIMER1
 ISR(TIMER1_OVF_vect) {
   TCNT1 = 0xC180;

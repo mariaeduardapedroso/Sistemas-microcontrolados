@@ -69,59 +69,85 @@ void setup() {
 
 //float T, erro, Kp;
 //float Ki, saida, saidaAnterior;
-
-float T1, T2, Pi;
+float Ki, Kp, Kd;
+float T1, T2, T3, Pid;
 void loop() {
+  Ki = 2;
+  Kp = 20;
+  Kd = 3;
 
   sensors.requestTemperatures();//requerimento da temperatura
 
   Serial.print("\nValor-da-temperatrura:");
   cont = sensors.getTempCByIndex(0);
-  Serial.print(cont);
-  Serial.print(",");
+  if (cont > -10.0) {
+    Serial.print(cont);
+    Serial.print(",");
 
-  dezena = cont / 10;
-  unidade = int(cont) % 10;
+    dezena = cont / 10;
+    unidade = int(cont) % 10;
 
-  T1 = controleProporcional(cont, 40, 12.8);
-  //  analogWrite(port_aquecedor, T1);
-  Serial.print("Saida-Proporcional:");
-  Serial.print(T1);
-  Serial.print(",");
+    T1 = controleProporcional(cont, 40, Kp);
+    //  analogWrite(port_aquecedor, T1);
+    Serial.print("Saida-Proporcional:");
+    Serial.print(T1);
+    Serial.print(",");
 
-  T2 = controleIntegral(cont, 40, 0.5, 0.1);
-  //  analogWrite(port_aquecedor, T2);
-  Serial.print("Saida-Integrador:");
-  Serial.print(T2);
-  Serial.print(",");
+    T2 = controleIntegral(cont, 40, Ki);
+    //  analogWrite(port_aquecedor, T2);
+    Serial.print("Saida-Integrador:");
+    Serial.print(T2);
+    Serial.print(",");
 
-  Pi = T1 + T2;
+    T3 = controleDerivativo(cont, 40, Kd);
+    //  analogWrite(port_aquecedor, T3);
+    Serial.print("Saida-Derivador:");
+    Serial.print(T3);
+    Serial.print(",");
 
-  Serial.print("Saida-Proporcional-Integrador:");
-  Serial.println(Pi);
+    Pid = T1 + T2 + T3;
 
-  analogWrite(port_aquecedor, Pi);
+    if (Pid > 255) {
+      Pid = 255;
+    } else if (Pid < 0) {
+      Pid = 0;
+    }
+
+    Serial.print("Saida-PID:");
+    Serial.println(Pid);
+
+    analogWrite(port_aquecedor, Pid);
+  }
+
 
 }
 
 float controleProporcional(float temperatura, float tempIdeal, float Kp) {
-  float T, erro;
+  float erro;
 
   erro = tempIdeal - temperatura;
-  T = erro * Kp;
 
-  return T;
+  return erro * Kp;
 }
 
-float saida = 0;
-float controleIntegral(float temperatura, float tempIdeal, float Ki, float T) {
-  float saidaAnterior;
+float erroAntAntAnt, erroAntAnt, erroAnt;
 
-  saidaAnterior = saida; // Valor inicial
+float controleIntegral(float temperatura, float tempIdeal, float Ki) {
+  float erro;
 
-  saida = saidaAnterior + Ki * T * (tempIdeal - temperatura);
+  erroAntAntAnt = erroAntAnt;
+  erroAntAnt = erroAnt;
+  erroAnt = erro;
+  erro = tempIdeal - temperatura;
 
-  return saida;
+  return Ki * (erro + erroAnt + erroAntAnt + erroAntAntAnt);
+}
+
+float controleDerivativo(float temperatura, float tempIdeal, float Kd) {
+  float erro;
+
+  erro = tempIdeal - temperatura;
+  return Kd * (erro - erroAnt);
 }
 
 

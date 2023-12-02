@@ -110,6 +110,7 @@ const int redled = 10;
 const int greenled = 11;
 const int buzz = 8;
 int pos = 0; // LCD Connections
+bool cofreAberto = false;
 
 //lcd
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
@@ -135,10 +136,19 @@ Keypad meuteclado = Keypad( makeKeymap(matriz_teclas), PinosqtdLinhas, PinosqtdC
 //aleatorio
 int tamanhoSenha = 4;
 char password[10] = "4567";
+char passwordEscrito[10];
 int currentposition = 0;
 int invalidcount = 0;
+bool portaAberta = false;
 
-
+// Definição das funções
+void displayscreen();
+void keypress();
+void incorrect();
+void torture1();
+void torture2();
+void counterbeep();
+void unlockbuzz();
 
 void setup()
 {
@@ -163,105 +173,88 @@ void setup()
   inicialTune();
 }
 
-void inicialTune() {
-  // Replace this with the notes and durations of your Christmas tune
-  int melody[] = {NOTE_E5, NOTE_E5, NOTE_E5, NOTE_B4, NOTE_D5, NOTE_C5, NOTE_C5, NOTE_D5, NOTE_E5, NOTE_E5, NOTE_D5, NOTE_D5};
-  int noteDurations[] = {8, 8, 4, 8, 8, 4, 8, 8, 8, 8, 8, 4};
-
-  for (int i = 0; i < sizeof(melody) / sizeof(melody[0]); i++) {
-    int noteDuration = 1000 / noteDurations[i];
-    tone(buzz, melody[i], noteDuration);
-    int pauseBetweenNotes = noteDuration * 1.30;
-    delay(pauseBetweenNotes);
-    noTone(buzz);
-  }
-}
-
 void loop()
 {
-  char tecla_pressionada = meuteclado.getKey(); //VERIFICA SE ALGUMA DAS TECLAS FOI PRESSIONADA
+  if (portaAberta) {
+    int proximidade = digitalRead(SENSOR_PIN);
+    if (proximidade == LOW) {
+      Serial.println("FECHADO 2");
+      counterbeep();
+      inicialTune();
+    }
+  } else {
+    char tecla_pressionada = meuteclado.getKey(); //VERIFICA SE ALGUMA DAS TECLAS FOI PRESSIONADA
 
-  if (tecla_pressionada) { //SE ALGUMA TECLA FOR PRESSIONADA, FAZ
-    Serial.print("Tecla pressionada : "); //IMPRIME O TEXTO NO MONITOR SERIAL
-    Serial.println(tecla_pressionada); //IMPRIME NO MONITOR SERIAL A TECLA PRESSIONADA
-  }
-
-
-  if ( currentposition == 0)
-  {
-    displayscreen();
-
-  }
-
-  int l ;
-
-  char code = tecla_pressionada;
-  if (code != NO_KEY)
-  {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("SENHA:");
-    lcd.setCursor(7, 1);
-    lcd.print(" ");
-    lcd.setCursor(7, 1);
-    for (l = 0; l <= currentposition; ++l)
-    {
-
-      lcd.print("*");
-      keypress();
+    if (tecla_pressionada) { //SE ALGUMA TECLA FOR PRESSIONADA, FAZ
+      Serial.print("Tecla pressionada : "); //IMPRIME O TEXTO NO MONITOR SERIAL
+      Serial.println(tecla_pressionada); //IMPRIME NO MONITOR SERIAL A TECLA PRESSIONADA
+      passwordEscrito[currentposition] = tecla_pressionada;
     }
 
-    if (code == password[currentposition])
+
+    if ( currentposition == 0)
     {
-      ++currentposition;
-      if (currentposition == tamanhoSenha)
+      displayscreen();
+    }
+
+    int l ;
+
+    char code = tecla_pressionada;
+    if (code != NO_KEY)
+    {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("SENHA:");
+      lcd.setCursor(3, 1);
+      for (l = 0; l <= currentposition; ++l)
       {
 
-        unlockdoor();
+        lcd.print("*");
+        keypress();
+      }
+      currentposition = currentposition + 1;
+
+      if (currentposition == tamanhoSenha) {
+        bool verificaSenha = true;
         currentposition = 0;
+        for (l = 0; l <= tamanhoSenha; ++l) {
+          if (passwordEscrito[l] != password[l]) {
+            //erro
+            Serial.print("ERRO SENHA: ");
+            Serial.print(passwordEscrito[l]);
+            Serial.print(" != ");
+            Serial.println(password[l]);
+            verificaSenha = false;
+          }
+        }
+
+        if (verificaSenha) {
+          unlockdoor();
+          Serial.println("INVALIDO CONTADOR OK");
+          Serial.println(invalidcount);
+          invalidcount = 0;
+        } else {
+          invalidcount = invalidcount + 1;
+          Serial.println("INVALIDO CONTADOR BAD");
+          Serial.println(invalidcount);
+          incorrect();
+        }
 
       }
-      Serial.println("INVALIDO CONTADOR OK");
-      invalidcount = 0;
 
+      if (invalidcount == 4)
+      {
+        ++invalidcount;
+        torture1();
+      }
+      if (invalidcount >= 8)
+      {
+        torture2();
+      }
     }
-    else
-    {
-      invalidcount = invalidcount + 1;
-      Serial.println("INVALIDO CONTADOR BAD");
-      Serial.println(invalidcount);
-      incorrect();
-      currentposition = 0;
 
-    }
-    if (invalidcount == 5)
-    {
-
-      ++invalidcount;
-      torture1();
-
-    }
-    if (invalidcount >= 8)
-    {
-      torture2();
-    }
 
   }
-
-
-
-
-
-  int proximidade = digitalRead(SENSOR_PIN);
-  if (proximidade == LOW) {
-    Serial.println("FECHADO");
-    inicialTune();
-  }
-
-
-
-
-
 
 
   //RFID
@@ -277,6 +270,20 @@ void loop()
   // Dump debug info about the card; PICC_HaltA() is automatically called
   mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
   // LOOP ENDS!!!//
+}
+
+void inicialTune() {
+  // Replace this with the notes and durations of your Christmas tune
+  int melody[] = {NOTE_E5, NOTE_E5, NOTE_E5, NOTE_B4, NOTE_D5, NOTE_C5, NOTE_C5, NOTE_D5, NOTE_E5, NOTE_E5, NOTE_D5, NOTE_D5};
+  int noteDurations[] = {8, 8, 4, 8, 8, 4, 8, 8, 8, 8, 8, 4};
+
+  for (int i = 0; i < sizeof(melody) / sizeof(melody[0]); i++) {
+    int noteDuration = 1000 / noteDurations[i];
+    tone(buzz, melody[i], noteDuration);
+    int pauseBetweenNotes = noteDuration * 1.30;
+    delay(pauseBetweenNotes);
+    noTone(buzz);
+  }
 }
 
 //*********************Abrir a porta****************************//
@@ -301,26 +308,10 @@ void unlockdoor()
   }
   delay(2000);
 
+  portaAberta = true;
 
-
-  delay(1000);
-  counterbeep();
-
-  delay(1000);
-
-  for (pos = 0; pos <= 180; pos += 5) // de 0 graus para 180 graus
-  { // in steps of 1 degree
-    myservo.write(pos); // servo para posição na variável 'pos'
-    delay(15);
-
-
-    currentposition = 0;
-
-    lcd.clear();
-    displayscreen();
-
-  }
 }
+
 
 //*****************Código errado***********************//
 
@@ -366,14 +357,12 @@ void keypress()
 //************************Display****************************//
 void displayscreen()
 {
-
   lcd.setCursor(0, 0);
   lcd.println("*DIGITE A SENHA*");
 }
 //*************************** ARM SERVO****************************************************************************//
 void armservo()
 {
-
   for (pos = 180; pos <= 180; pos += 50)
   {
     myservo.write(pos);
@@ -385,7 +374,6 @@ void armservo()
   {
     myservo.write(pos);
   }
-
 }
 //********************************UNLOCK BUZZ***********************************//
 void unlockbuzz()
@@ -403,9 +391,7 @@ void counterbeep()
 {
   delay(1200);
 
-
   lcd.clear();
-  digitalWrite(buzz, HIGH);
 
   lcd.setCursor(2, 15);
   lcd.println(" ");
@@ -413,100 +399,36 @@ void counterbeep()
   lcd.println(" ");
   lcd.setCursor(2, 0);
   delay(200);
-  lcd.print("FECHANDO EM:::");
+  lcd.print("FECHANDO EM:");
+  for (int i = 5; i > 0; i--) {
+    lcd.setCursor(3, 1);
+    lcd.print(i);
+    keypress();
+    delay(1000);
+  }
 
-  lcd.setCursor(4, 1);
-  lcd.print("5");
-  delay(200);
+  for (pos = 0; pos <= 180; pos += 5) // de 0 graus para 180 graus
+  { // in steps of 1 degree
+    myservo.write(pos); // servo para posição na variável 'pos'
+  }
+  delay(15);
+
+  currentposition = 0;
+
   lcd.clear();
-  lcd.setCursor(2, 0);
-  lcd.print("FECHANDO EM:");
-  digitalWrite(buzz, LOW);
-  delay(1000);
-  //2
-  digitalWrite(buzz, HIGH);
-  lcd.setCursor(2, 0);
-  lcd.print("FECHANDO EM:");
-  lcd.setCursor(4, 1); //2
-  lcd.print("4");
-  delay(100);
-  lcd.clear();
-  lcd.setCursor(2, 0);
-  lcd.print("FECHANDO EM:");
-  digitalWrite(buzz, LOW);
-  delay(1000);
-  //3
-  digitalWrite(buzz, HIGH);
-  lcd.setCursor(2, 0);
-  lcd.print("FECHANDO EM:::");
-  lcd.setCursor(4, 1); //3
-  lcd.print("3");
-  delay(100);
-  lcd.clear();
-  lcd.setCursor(2, 0);
-  lcd.print("FECHANDO EM:::");
-  digitalWrite(buzz, LOW);
-  delay(1000);
-  //4
-  digitalWrite(buzz, HIGH);
-  lcd.setCursor(2, 0);
-  lcd.print("FECHANDO EM:::");
-  lcd.setCursor(4, 1); //4
-  lcd.print("2");
-  delay(100);
-  lcd.clear();
-  lcd.setCursor(2, 0);
-  lcd.print("FECHANDO EM:::");
-  digitalWrite(buzz, LOW);
-  delay(1000);
-  //
-  digitalWrite(buzz, HIGH);
-  lcd.setCursor(4, 1);
-  lcd.print("1");
-  delay(100);
-  lcd.clear();
-  lcd.setCursor(2, 0);
-  lcd.println("GET IN WITHIN::");
-  digitalWrite(buzz, LOW);
-  delay(1000);
-  //5
-  digitalWrite(buzz, HIGH);
-  delay(40);
-  digitalWrite(buzz, LOW);
-  delay(40);
-  digitalWrite(buzz, HIGH);
-  delay(40);
-  digitalWrite(buzz, LOW);
-  delay(40);
-  digitalWrite(buzz, HIGH);
-  delay(40);
-  digitalWrite(buzz, LOW);
-  delay(40);
-  digitalWrite(buzz, HIGH);
-  delay(40);
-  digitalWrite(buzz, LOW);
-  lcd.clear();
-  lcd.setCursor(2, 0);
-  lcd.print("RE-LOCKING");
-  delay(500);
-  lcd.setCursor(12, 0);
-  lcd.print(".");
-  delay(500);
-  lcd.setCursor(13, 0);
-  lcd.print(".");
-  delay(500);
-  lcd.setCursor(14, 0);
-  lcd.print(".");
-  delay(400);
+  displayscreen();
+
   lcd.clear();
   lcd.setCursor(4, 0);
   lcd.print("FECHADO!");
   delay(440);
+
+  portaAberta = false;
 }
 //*****************************TORTURE1****************************************//
 void torture1()
 {
-  delay(1000);
+  //  delay(1000);
   lcd.clear();
   lcd.setCursor(2, 0);
   lcd.print("AGUARDE POR ");
@@ -527,28 +449,28 @@ void torture1()
 //******************************TORTURE2*****************************************//
 void torture2()
 {
-  delay(1000);
+  //  delay(1000);
   lcd.setCursor(1, 0);
   lcd.print(" ");
   lcd.setCursor(2, 0);
-  lcd.print("EAR DRUMS ARE");
+  lcd.print("MUITAS");
   lcd.setCursor(0, 1);
-  lcd.print(" PRECIOUS!! ");
+  lcd.print(" TENTATIVAS!! ");
   delay(1500);
   lcd.clear();
   lcd.setCursor(1, 0);
-  lcd.print(" WAIT FOR");
+  lcd.print("AGUARDE POR ");
   lcd.setCursor(4, 1);
-  lcd.print(" 1 MINUTE");
+  lcd.print(" 1 MINUTO");
   digitalWrite(buzz, HIGH);
   delay(55000);
   counterbeep();
   lcd.clear();
   digitalWrite(buzz, LOW);
   lcd.setCursor(2, 0);
-  lcd.print("WANT ME TO");
+  lcd.print("TENTE ACERTAR");
   lcd.setCursor(1, 1);
-  lcd.print("REDICULE MORE??");
+  lcd.print("TA DIFICIL??");
   delay(2500);
   lcd.clear();
   lcd.setCursor(2, 0);

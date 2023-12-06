@@ -140,6 +140,7 @@ char passwordEscrito[10];
 int currentposition = 0;
 int invalidcount = 0;
 bool portaAberta = false;
+byte tagEsperada[] = {0x52, 0x68, 0x50, 0x1B};
 
 // Definição das funções
 void displayscreen();
@@ -172,104 +173,238 @@ void setup()
 
   inicialTune();
 }
+bool modoAdmin = false;
+
+int estado = 0;
 
 void loop()
 {
-  if (portaAberta) {
-    int proximidade = digitalRead(SENSOR_PIN);
-    if (proximidade == LOW) {
-      Serial.println("FECHADO 2");
-      counterbeep();
-      inicialTune();
+  if (modoAdmin) {
+    estado = 0;
+    menu();
+    switch (estado) {
+
+      case 1:
+        //trocar tag
+        trocarTag();
+        break;
+
+      case 2:
+        //trocar senha
+        trocarSenha();
+        break;
     }
   } else {
-    char tecla_pressionada = meuteclado.getKey(); //VERIFICA SE ALGUMA DAS TECLAS FOI PRESSIONADA
-
-    if (tecla_pressionada) { //SE ALGUMA TECLA FOR PRESSIONADA, FAZ
-      Serial.print("Tecla pressionada : "); //IMPRIME O TEXTO NO MONITOR SERIAL
-      Serial.println(tecla_pressionada); //IMPRIME NO MONITOR SERIAL A TECLA PRESSIONADA
-      passwordEscrito[currentposition] = tecla_pressionada;
-    }
-
-
-    if ( currentposition == 0)
-    {
-      displayscreen();
-    }
-
-    int l ;
-
-    char code = tecla_pressionada;
-    if (code != NO_KEY)
-    {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("SENHA:");
-      lcd.setCursor(3, 1);
-      for (l = 0; l <= currentposition; ++l)
-      {
-
-        lcd.print("*");
-        keypress();
+    if (portaAberta) {
+      int proximidade = digitalRead(SENSOR_PIN);
+      if (proximidade == LOW) {
+        Serial.println("FECHADO 2");
+        counterbeep();
+        inicialTune();
       }
-      currentposition = currentposition + 1;
+    } else {
+      char tecla_pressionada = meuteclado.getKey(); //VERIFICA SE ALGUMA DAS TECLAS FOI PRESSIONADA
 
-      if (currentposition == tamanhoSenha) {
-        bool verificaSenha = true;
-        currentposition = 0;
-        for (l = 0; l <= tamanhoSenha; ++l) {
-          if (passwordEscrito[l] != password[l]) {
-            //erro
-            Serial.print("ERRO SENHA: ");
-            Serial.print(passwordEscrito[l]);
-            Serial.print(" != ");
-            Serial.println(password[l]);
-            verificaSenha = false;
+      if (tecla_pressionada) { //SE ALGUMA TECLA FOR PRESSIONADA, FAZ
+        Serial.print("Tecla pressionada : "); //IMPRIME O TEXTO NO MONITOR SERIAL
+        Serial.println(tecla_pressionada); //IMPRIME NO MONITOR SERIAL A TECLA PRESSIONADA
+        passwordEscrito[currentposition] = tecla_pressionada;
+      }
+
+
+      if ( currentposition == 0)
+      {
+        displayscreen();
+      }
+
+      int l ;
+
+      char code = tecla_pressionada;
+      if (code != NO_KEY)
+      {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("SENHA:");
+        lcd.setCursor(3, 1);
+        for (l = 0; l <= currentposition; ++l)
+        {
+
+          lcd.print("*");
+          keypress();
+        }
+        currentposition = currentposition + 1;
+
+        if (currentposition == tamanhoSenha) {
+          bool verificaSenha = true;
+          currentposition = 0;
+          for (l = 0; l <= tamanhoSenha; ++l) {
+            if (passwordEscrito[l] != password[l]) {
+              //erro
+              Serial.print("ERRO SENHA: ");
+              Serial.print(passwordEscrito[l]);
+              Serial.print(" != ");
+              Serial.println(password[l]);
+              verificaSenha = false;
+            }
           }
+
+          if (verificaSenha) {
+            unlockdoor();
+            Serial.println("INVALIDO CONTADOR OK");
+            Serial.println(invalidcount);
+            invalidcount = 0;
+          } else {
+            invalidcount = invalidcount + 1;
+            Serial.println("INVALIDO CONTADOR BAD");
+            Serial.println(invalidcount);
+            incorrect();
+          }
+
         }
 
-        if (verificaSenha) {
-          unlockdoor();
-          Serial.println("INVALIDO CONTADOR OK");
-          Serial.println(invalidcount);
-          invalidcount = 0;
-        } else {
-          invalidcount = invalidcount + 1;
-          Serial.println("INVALIDO CONTADOR BAD");
-          Serial.println(invalidcount);
-          incorrect();
+        if (invalidcount == 4)
+        {
+          ++invalidcount;
+          torture1();
         }
-
+        if (invalidcount >= 8)
+        {
+          torture2();
+        }
       }
 
-      if (invalidcount == 4)
-      {
-        ++invalidcount;
-        torture1();
-      }
-      if (invalidcount >= 8)
-      {
-        torture2();
-      }
+    }
+  }
+
+
+  if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+    // Mostra os UID da tag
+    Serial.print("UID da Tag:");
+    for (byte i = 0; i < mfrc522.uid.size; i++) {
+      Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+      Serial.print(mfrc522.uid.uidByte[i], HEX);
+    }
+    Serial.println();
+
+    // Comparação do UID com o valor esperado
+    if (verificarTag()) {
+      Serial.println("Tag correta!");
+      modoAdmin = true;
+    } else {
+      Serial.println("Tag incorreta!");
     }
 
-
+    delay(1000);  // Evita leituras repetidas muito rápidas
   }
 
+}
 
-  //RFID
-  if ( ! mfrc522.PICC_IsNewCardPresent()) {
-    return;
+
+
+void menu() {
+  lcd.clear();
+  lcd.print("Escolha:");
+  lcd.setCursor(0, 2);
+  lcd.print("1: Tag 2: Senha");
+
+  char opcao = 0;
+
+  while (opcao != '1' && opcao != '2') {
+    opcao = meuteclado.getKey();
   }
 
-  // Select one of the cards
-  if ( ! mfrc522.PICC_ReadCardSerial()) {
-    return;
+  lcd.clear();
+
+  switch (opcao) {
+    case '1':
+      lcd.print("Trocar Tag");
+      // Chame a função para trocar a tag aqui
+      estado = 1;
+      delay(2000);  // Aguarda por 2 segundos para exibir a mensagem
+      break;
+    case '2':
+      lcd.print("Trocar Senha");
+      estado = 2;
+      // Chame a função para trocar a senha aqui
+      delay(2000);  // Aguarda por 2 segundos para exibir a mensagem
+      break;
   }
 
-  // Dump debug info about the card; PICC_HaltA() is automatically called
-  mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
-  // LOOP ENDS!!!//
+  lcd.clear();
+}
+
+
+void trocarSenha() {
+  lcd.clear();
+  lcd.print("Nova senha:");
+  lcd.setCursor(0, 1);
+
+  byte index = 0;
+
+  while (true) {
+    char tecla = meuteclado.getKey();
+
+    if (tecla) {
+      if (tecla == '#') {
+        password[index] = '\0'; // Adiciona o caractere nulo para indicar o final da string
+        tamanhoSenha = index;
+        break; // Finaliza a entrada da senha
+      } else if (index < 10) {
+        password[index++] = tecla;
+        lcd.print('*'); // Máscara para esconder os caracteres digitados
+      }
+    }
+  }
+
+  Serial.println(); // Nova linha para melhorar a legibilidade
+
+  Serial.print("Senha alterada para: ");
+  Serial.println(password);
+  modoAdmin = false;
+
+}
+
+
+void trocarTag() {
+  lcd.clear();
+  lcd.print("Aproxime o cartao:");
+
+  while (!mfrc522.PICC_IsNewCardPresent()) {
+    delay(50);
+  }
+
+  if (mfrc522.PICC_ReadCardSerial()) {
+    for (byte i = 0; i < mfrc522.uid.size && i < sizeof(tagEsperada); i++) {
+      tagEsperada[i] = mfrc522.uid.uidByte[i];
+    }
+
+    lcd.clear();
+    lcd.print("Tag trocada para:");
+    lcd.setCursor(0, 1);
+
+    for (byte i = 0; i < sizeof(tagEsperada); i++) {
+      lcd.print(tagEsperada[i], HEX);
+    }
+
+    delay(2000);  // Aguarda por 2 segundos para exibir a mensagem
+    modoAdmin = false;
+  }
+
+  mfrc522.PICC_HaltA();
+  mfrc522.PCD_StopCrypto1();
+}
+
+
+bool verificarTag() {
+  // Substitua este array pelos valores esperados do UID da sua tag
+
+  // Verifica se o UID da tag corresponde ao esperado
+  for (byte i = 0; i < mfrc522.uid.size; i++) {
+    if (mfrc522.uid.uidByte[i] != tagEsperada[i]) {
+      return false;  // UID não corresponde
+    }
+  }
+  return true;  // UID corresponde
 }
 
 void inicialTune() {

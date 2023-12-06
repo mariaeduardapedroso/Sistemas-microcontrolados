@@ -223,6 +223,7 @@ void loop()
       if (code != NO_KEY)
       {
         lcd.clear();
+        
         lcd.setCursor(0, 0);
         lcd.print("SENHA:");
         lcd.setCursor(3, 1);
@@ -367,7 +368,7 @@ void trocarSenha() {
 
 void trocarTag() {
   lcd.clear();
-  lcd.print("Aproxime o cartao:");
+  lcd.print("Aproxime cartao:");
 
   while (!mfrc522.PICC_IsNewCardPresent()) {
     delay(50);
@@ -492,6 +493,7 @@ void keypress()
 //************************Display****************************//
 void displayscreen()
 {
+  lcd.clear();
   lcd.setCursor(0, 0);
   lcd.println("*DIGITE A SENHA*");
 }

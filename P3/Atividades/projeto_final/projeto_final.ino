@@ -88,52 +88,49 @@
 #define NOTE_D8 4699
 #define NOTE_DS8 4978
 
+
+// Bibliotecas necessárias
 #include <Keypad.h>
 #include <LiquidCrystal.h>
 #include <Servo.h>
 #include <SPI.h>
 #include <MFRC522.h>
 
-//rfid
-#define RST_PIN         7          // Configurable, see typical pin layout above
-#define SS_PIN          53         // Configurable, see typical pin layout above
-MFRC522 mfrc522(SS_PIN, RST_PIN);  // Create MFRC522 instance
+// Configuração do módulo RFID
+#define RST_PIN 7
+#define SS_PIN 53
+MFRC522 mfrc522(SS_PIN, RST_PIN);
 
-//magnetica tranca
+// Configuração do sensor magnético da tranca
 const int SENSOR_PIN = 13;
+const int DARK_THRESHOLD = 100;
 
-const int DARK_THRESHOLD = 100; // you might need to adjust this based on testing
-
-//servomotor
+// Configuração do servo motor
 Servo myservo;
 const int redled = 10;
 const int greenled = 11;
 const int buzz = 8;
-int pos = 0; // LCD Connections
-bool cofreAberto = false;
+int pos = 0;
 
-//lcd
+// Configuração do LCD
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 const byte rows = 4;
 const byte cols = 3;
 
-////teclado
-const byte qtdLinhas = 4; //QUANTIDADE DE LINHAS DO TECLADO
-const byte qtdColunas = 4; //QUANTIDADE DE COLUNAS DO TECLADO
-
-//CONSTRUÇÃO DA MATRIZ DE CARACTERES
+// Configuração do teclado
+const byte qtdLinhas = 4;
+const byte qtdColunas = 4;
 char matriz_teclas[qtdLinhas][qtdColunas] = {
   {'1', '2', '3', 'A'},
   {'4', '5', '6', 'B'},
   {'7', '8', '9', 'C'},
   {'*', '0', '#', 'D'}
 };
-byte PinosqtdLinhas[qtdLinhas] = {38, 39, 40, 41}; //PINOS UTILIZADOS PELAS LINHAS
-byte PinosqtdColunas[qtdColunas] = {42, 43, 44, 45}; //PINOS UTILIZADOS PELAS COLUNAS
-//INICIALIZAÇÃO DO TECLADO
-Keypad meuteclado = Keypad( makeKeymap(matriz_teclas), PinosqtdLinhas, PinosqtdColunas, qtdLinhas, qtdColunas);
+byte PinosqtdLinhas[qtdLinhas] = {38, 39, 40, 41};
+byte PinosqtdColunas[qtdColunas] = {42, 43, 44, 45};
+Keypad meuteclado = Keypad(makeKeymap(matriz_teclas), PinosqtdLinhas, PinosqtdColunas, qtdLinhas, qtdColunas);
 
-//aleatorio
+// Configuração de senha aleatória
 int tamanhoSenha = 4;
 char password[10] = "4567";
 char passwordEscrito[10];
@@ -142,7 +139,7 @@ int invalidcount = 0;
 bool portaAberta = false;
 byte tagEsperada[] = {0x52, 0x68, 0x50, 0x1B};
 
-// Definição das funções
+// Protótipos das funções
 void displayscreen();
 void keypress();
 void incorrect();
@@ -151,96 +148,97 @@ void torture2();
 void counterbeep();
 void unlockbuzz();
 
-void setup()
-{
-  displayscreen();
-  Serial.begin(9600);
-  pinMode(redled, OUTPUT);
-  pinMode(greenled, OUTPUT);
-  pinMode(buzz, OUTPUT);
-  myservo.attach(9); //SERVO ATTACHED//
+// Função de inicialização
+void setup() {
+  displayscreen(); // Inicializa o LCD
+  Serial.begin(9600); // Inicializa a comunicação serial
+  pinMode(redled, OUTPUT); // Configura o LED vermelho como saída
+  pinMode(greenled, OUTPUT); // Configura o LED verde como saída
+  pinMode(buzz, OUTPUT); // Configura o buzzer como saída
+  myservo.attach(9); // Anexa o servo motor
+  pinMode(SENSOR_PIN, INPUT_PULLUP); // Configura o pino do sensor magnético
 
-  pinMode(SENSOR_PIN, INPUT_PULLUP);
+  lcd.begin(16, 2); // Inicializa o LCD
 
-  lcd.begin(16, 2);
+  while (!Serial);    // Aguarda a inicialização da porta serial
+  SPI.begin();      // Inicializa o barramento SPI
+  mfrc522.PCD_Init();   // Inicializa o módulo RFID
+  delay(4);       // Atraso opcional após a inicialização
+  mfrc522.PCD_DumpVersionToSerial();  // Exibe detalhes do módulo RFID
+  Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks...")); // Mensagem para escanear PICC
 
-  while (!Serial);    // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
-  SPI.begin();      // Init SPI bus
-  mfrc522.PCD_Init();   // Init MFRC522
-  delay(4);       // Optional delay. Some board do need more time after init to be ready, see Readme
-  mfrc522.PCD_DumpVersionToSerial();  // Show details of PCD - MFRC522 Card Reader details
-  Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
-
-  inicialTune();
+  inicialTune(); // Toca uma melodia inicial
 }
-bool modoAdmin = false;
 
+bool modoAdmin = false;
 int estado = 0;
 
-void loop()
-{
+// Função principal
+void loop() {
   if (modoAdmin) {
     estado = 0;
-    menu();
+    menu(); // Exibe o menu
     switch (estado) {
-
       case 1:
-        //trocar tag
-        trocarTag();
+        keypress(); // Aguarda a entrada do usuário
+        trocarTag(); // Função para trocar a tag
         break;
-
       case 2:
-        //trocar senha
-        trocarSenha();
+        keypress(); // Aguarda a entrada do usuário
+        trocarSenha(); // Função para trocar a senha
         break;
     }
+        if(portaAberta){
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.println(" ");
+          lcd.setCursor(1, 0);
+          lcd.print("Autorizado");
+          lcd.setCursor(4, 1);
+          lcd.print("BEM-VINDO");
+        }
   } else {
     if (portaAberta) {
       int proximidade = digitalRead(SENSOR_PIN);
       if (proximidade == LOW) {
-        Serial.println("FECHADO 2");
-        counterbeep();
-        inicialTune();
+        Serial.println("FECHADO");
+        counterbeep(); // Emite um som indicando a proximidade
+        inicialTune(); // Toca a melodia inicial
       }
     } else {
-      char tecla_pressionada = meuteclado.getKey(); //VERIFICA SE ALGUMA DAS TECLAS FOI PRESSIONADA
+      char tecla_pressionada = meuteclado.getKey(); // Verifica se alguma tecla foi pressionada
 
-      if (tecla_pressionada) { //SE ALGUMA TECLA FOR PRESSIONADA, FAZ
-        Serial.print("Tecla pressionada : "); //IMPRIME O TEXTO NO MONITOR SERIAL
-        Serial.println(tecla_pressionada); //IMPRIME NO MONITOR SERIAL A TECLA PRESSIONADA
+      if (tecla_pressionada) { // Se alguma tecla foi pressionada
+        Serial.print("Tecla pressionada : ");
+        Serial.println(tecla_pressionada);
         passwordEscrito[currentposition] = tecla_pressionada;
       }
 
-
-      if ( currentposition == 0)
-      {
-        displayscreen();
+      if (currentposition == 0) {
+        displayscreen(); // Atualiza a tela
       }
 
       int l ;
 
       char code = tecla_pressionada;
-      if (code != NO_KEY)
-      {
+      if (code != NO_KEY) {
         lcd.clear();
-        
+
         lcd.setCursor(0, 0);
         lcd.print("SENHA:");
         lcd.setCursor(3, 1);
-        for (l = 0; l <= currentposition; ++l)
-        {
-
+        for (l = 0; l <= currentposition; ++l) {
           lcd.print("*");
-          keypress();
+          keypress(); // Aguarda a entrada do usuário
         }
         currentposition = currentposition + 1;
 
         if (currentposition == tamanhoSenha) {
           bool verificaSenha = true;
           currentposition = 0;
-          for (l = 0; l <= tamanhoSenha; ++l) {
+          for (l = 0; l < tamanhoSenha; ++l) {
             if (passwordEscrito[l] != password[l]) {
-              //erro
+              // Erro
               Serial.print("ERRO SENHA: ");
               Serial.print(passwordEscrito[l]);
               Serial.print(" != ");
@@ -250,7 +248,7 @@ void loop()
           }
 
           if (verificaSenha) {
-            unlockdoor();
+            unlockdoor(); // Abre a porta
             Serial.println("INVALIDO CONTADOR OK");
             Serial.println(invalidcount);
             invalidcount = 0;
@@ -258,25 +256,20 @@ void loop()
             invalidcount = invalidcount + 1;
             Serial.println("INVALIDO CONTADOR BAD");
             Serial.println(invalidcount);
-            incorrect();
+            incorrect(); // Feedback de senha incorreta
           }
-
         }
 
-        if (invalidcount == 4)
-        {
+        if (invalidcount == 4) {
           ++invalidcount;
-          torture1();
+          torture1(); // Sequência de tortura 1
         }
-        if (invalidcount >= 8)
-        {
-          torture2();
+        if (invalidcount >= 8) {
+          torture2(); // Sequência de tortura 2
         }
       }
-
     }
   }
-
 
   if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
     // Mostra os UID da tag
@@ -290,6 +283,7 @@ void loop()
     // Comparação do UID com o valor esperado
     if (verificarTag()) {
       Serial.println("Tag correta!");
+      keypress(); // Aguarda a entrada do usuário
       modoAdmin = true;
     } else {
       Serial.println("Tag incorreta!");
@@ -297,11 +291,9 @@ void loop()
 
     delay(1000);  // Evita leituras repetidas muito rápidas
   }
-
 }
 
-
-
+// Função para exibir o menu de escolha
 void menu() {
   lcd.clear();
   lcd.print("Escolha:");
@@ -319,7 +311,6 @@ void menu() {
   switch (opcao) {
     case '1':
       lcd.print("Trocar Tag");
-      // Chame a função para trocar a tag aqui
       estado = 1;
       delay(2000);  // Aguarda por 2 segundos para exibir a mensagem
       break;
@@ -334,7 +325,7 @@ void menu() {
   lcd.clear();
 }
 
-
+// Função para trocar a senha
 void trocarSenha() {
   lcd.clear();
   lcd.print("Nova senha:");
@@ -344,28 +335,36 @@ void trocarSenha() {
 
   while (true) {
     char tecla = meuteclado.getKey();
-
     if (tecla) {
+        keypress();
+        
       if (tecla == '#') {
         password[index] = '\0'; // Adiciona o caractere nulo para indicar o final da string
         tamanhoSenha = index;
         break; // Finaliza a entrada da senha
-      } else if (index < 10) {
+      } 
+
+      if (index < 9) {
         password[index++] = tecla;
         lcd.print('*'); // Máscara para esconder os caracteres digitados
+      }else{
+        tamanhoSenha = index;
+        break; // Finaliza a entrada da senha
       }
     }
   }
 
   Serial.println(); // Nova linha para melhorar a legibilidade
+  lcd.clear();
+  lcd.print("Senha alterada!");
+  delay(1000);
 
   Serial.print("Senha alterada para: ");
   Serial.println(password);
   modoAdmin = false;
-
 }
 
-
+// Função para trocar a tag RFID
 void trocarTag() {
   lcd.clear();
   lcd.print("Aproxime cartao:");
@@ -395,11 +394,8 @@ void trocarTag() {
   mfrc522.PCD_StopCrypto1();
 }
 
-
+// Função para verificar se a tag RFID é válida
 bool verificarTag() {
-  // Substitua este array pelos valores esperados do UID da sua tag
-
-  // Verifica se o UID da tag corresponde ao esperado
   for (byte i = 0; i < mfrc522.uid.size; i++) {
     if (mfrc522.uid.uidByte[i] != tagEsperada[i]) {
       return false;  // UID não corresponde
@@ -408,8 +404,8 @@ bool verificarTag() {
   return true;  // UID corresponde
 }
 
+// Função para tocar uma melodia inicial
 void inicialTune() {
-  // Replace this with the notes and durations of your Christmas tune
   int melody[] = {NOTE_E5, NOTE_E5, NOTE_E5, NOTE_B4, NOTE_D5, NOTE_C5, NOTE_C5, NOTE_D5, NOTE_E5, NOTE_E5, NOTE_D5, NOTE_D5};
   int noteDurations[] = {8, 8, 4, 8, 8, 4, 8, 8, 8, 8, 8, 4};
 
@@ -422,10 +418,8 @@ void inicialTune() {
   }
 }
 
-//*********************Abrir a porta****************************//
-
-void unlockdoor()
-{
+// Função para abrir a porta
+void unlockdoor() {
   delay(900);
 
   lcd.setCursor(0, 0);
@@ -437,22 +431,17 @@ void unlockdoor()
 
   unlockbuzz();
 
-  for (pos = 180; pos >= 0; pos -= 5) //   De 180 graus para 0 graus
-  {
-    myservo.write(pos); // servo para posição na variável 'pos'
-    delay(5); // espera 15ms para servo atingir a posição
+  for (pos = 90; pos >= 0; pos -= 5) {
+    myservo.write(pos);
+    delay(5);
   }
   delay(2000);
 
   portaAberta = true;
-
 }
 
-
-//*****************Código errado***********************//
-
-void incorrect()
-{
+// Função para lidar com código incorreto
+void incorrect() {
   delay(500);
   lcd.clear();
   lcd.setCursor(1, 0);
@@ -463,17 +452,17 @@ void incorrect()
 
   Serial.println("CÓDIGO INCORRETO. NÃO AUTORIZADO");
   digitalWrite(redled, HIGH);
-  tone(buzz, NOTE_E1, 1000);  // Você pode ajustar a frequência e a duração do beep aqui
-  delay(500);  // Adiciona um pequeno atraso para separar beeps consecutivos (ajuste conforme necessário)
-  noTone(buzz);  // Para o beep
+  tone(buzz, NOTE_E1, 1000);
+  delay(500);
+  noTone(buzz);
   delay(3000);
   lcd.clear();
   digitalWrite(redled, LOW);
   displayscreen();
 }
-//*************Limpar tela****************//
-void clearscreen()
-{
+
+// Função para limpar a tela do LCD
+void clearscreen() {
   lcd.setCursor(0, 0);
   lcd.println(" ");
   lcd.setCursor(0, 1);
@@ -483,70 +472,62 @@ void clearscreen()
   lcd.setCursor(0, 3);
   lcd.println(" ");
 }
-//******************************KEYPRESS***********************************//
-void keypress()
-{
-  tone(buzz, NOTE_C6, 100);  // Você pode ajustar a frequência e a duração do beep aqui
-  delay(50);  // Adiciona um pequeno atraso para separar beeps consecutivos (ajuste conforme necessário)
-  noTone(buzz);  // Para o beep
+
+// Função para emitir um som de tecla pressionada
+void keypress() {
+  tone(buzz, NOTE_C6, 100);
+  delay(50);
+  noTone(buzz);
 }
-//************************Display****************************//
-void displayscreen()
-{
+
+// Função para exibir a tela inicial no LCD
+void displayscreen() {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.println("*DIGITE A SENHA*");
 }
-//*************************** ARM SERVO****************************************************************************//
-void armservo()
-{
-  for (pos = 180; pos <= 180; pos += 50)
-  {
+
+// Função para posicionar o servo
+void armservo() {
+  for (pos = 180; pos <= 180; pos += 50) {
     myservo.write(pos);
     delay(5);
   }
   delay(5000);
 
-  for (pos = 180; pos >= 0; pos -= 50)
-  {
+  for (pos = 180; pos >= 0; pos -= 50) {
     myservo.write(pos);
   }
 }
-//********************************UNLOCK BUZZ***********************************//
-void unlockbuzz()
-{
 
+// Função para emitir um som de desbloqueio
+void unlockbuzz() {
   for (int i = 0; i < 4; i++) {
-    tone(buzz, NOTE_C6, 100);  // Você pode ajustar a frequência e a duração do beep aqui
+    tone(buzz, NOTE_C6, 100);
     delay(500);
     noTone(buzz);
   }
 }
 
-//*******************************COUNTER BEEP*************************************//
-void counterbeep()
-{
+// Função para contar beeps
+void counterbeep() {
   delay(1200);
 
   lcd.clear();
 
-  lcd.setCursor(2, 15);
-  lcd.println(" ");
-  lcd.setCursor(2, 14);
-  lcd.println(" ");
   lcd.setCursor(2, 0);
   delay(200);
   lcd.print("FECHANDO EM:");
   for (int i = 5; i > 0; i--) {
-    lcd.setCursor(3, 1);
+    lcd.setCursor(7, 1);
+    lcd.print("0");
     lcd.print(i);
     keypress();
     delay(1000);
   }
 
-  for (pos = 0; pos <= 180; pos += 5) // de 0 graus para 180 graus
-  { // in steps of 1 degree
-    myservo.write(pos); // servo para posição na variável 'pos'
+  for (pos = 0; pos <= 90; pos += 5) {
+    myservo.write(pos);
   }
   delay(15);
 
@@ -562,10 +543,9 @@ void counterbeep()
 
   portaAberta = false;
 }
-//*****************************TORTURE1****************************************//
-void torture1()
-{
-  //  delay(1000);
+
+// Função de tortura 1
+void torture1() {
   lcd.clear();
   lcd.setCursor(2, 0);
   lcd.print("AGUARDE POR ");
@@ -581,12 +561,10 @@ void torture1()
   lcd.print("TENTE NOVAMENTE");
   delay(3500);
   lcd.clear();
-
 }
-//******************************TORTURE2*****************************************//
-void torture2()
-{
-  //  delay(1000);
+
+// Função de tortura 2
+void torture2() {
   lcd.setCursor(1, 0);
   lcd.print(" ");
   lcd.setCursor(2, 0);

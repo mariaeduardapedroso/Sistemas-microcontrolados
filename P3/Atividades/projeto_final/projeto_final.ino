@@ -188,16 +188,36 @@ void loop() {
         trocarSenha(); // Função para trocar a senha
         break;
     }
-        if(portaAberta){
-          lcd.clear();
-          lcd.setCursor(0, 0);
-          lcd.println(" ");
-          lcd.setCursor(1, 0);
-          lcd.print("Autorizado");
-          lcd.setCursor(4, 1);
-          lcd.print("BEM-VINDO");
-        }
+    if (portaAberta) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.println(" ");
+      lcd.setCursor(1, 0);
+      lcd.print("Autorizado");
+      lcd.setCursor(4, 1);
+      lcd.print("BEM-VINDO");
+    }
   } else {
+    if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+      // Mostra os UID da tag
+      Serial.print("UID da Tag:");
+      for (byte i = 0; i < mfrc522.uid.size; i++) {
+        Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+        Serial.print(mfrc522.uid.uidByte[i], HEX);
+      }
+      Serial.println();
+
+      // Comparação do UID com o valor esperado
+      if (verificarTag()) {
+        Serial.println("Tag correta!");
+        keypress(); // Aguarda a entrada do usuário
+        modoAdmin = true;
+      } else {
+        Serial.println("Tag incorreta!");
+      }
+
+      delay(1000);  // Evita leituras repetidas muito rápidas
+    }
     if (portaAberta) {
       int proximidade = digitalRead(SENSOR_PIN);
       if (proximidade == LOW) {
@@ -271,26 +291,7 @@ void loop() {
     }
   }
 
-  if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
-    // Mostra os UID da tag
-    Serial.print("UID da Tag:");
-    for (byte i = 0; i < mfrc522.uid.size; i++) {
-      Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
-      Serial.print(mfrc522.uid.uidByte[i], HEX);
-    }
-    Serial.println();
 
-    // Comparação do UID com o valor esperado
-    if (verificarTag()) {
-      Serial.println("Tag correta!");
-      keypress(); // Aguarda a entrada do usuário
-      modoAdmin = true;
-    } else {
-      Serial.println("Tag incorreta!");
-    }
-
-    delay(1000);  // Evita leituras repetidas muito rápidas
-  }
 }
 
 // Função para exibir o menu de escolha
@@ -336,21 +337,22 @@ void trocarSenha() {
   while (true) {
     char tecla = meuteclado.getKey();
     if (tecla) {
-        keypress();
-        
-      if (tecla == '#') {
+      keypress();
+
+      if (tecla == '#' and index > 0) {
         password[index] = '\0'; // Adiciona o caractere nulo para indicar o final da string
         tamanhoSenha = index;
         break; // Finaliza a entrada da senha
-      } 
-
-      if (index < 9) {
-        password[index++] = tecla;
-        lcd.print('*'); // Máscara para esconder os caracteres digitados
-      }else{
-        tamanhoSenha = index;
-        break; // Finaliza a entrada da senha
       }
+
+      if (index < 10) {
+        password[index++] = tecla;
+        if (index == 10){
+          tamanhoSenha = index;
+          break;
+        }
+        lcd.print('*'); // Máscara para esconder os caracteres digitados
+      } 
     }
   }
 
@@ -370,7 +372,7 @@ void trocarTag() {
   lcd.print("Aproxime cartao:");
 
   while (!mfrc522.PICC_IsNewCardPresent()) {
-    delay(50);
+    delay(1000);
   }
 
   if (mfrc522.PICC_ReadCardSerial()) {
@@ -379,8 +381,8 @@ void trocarTag() {
     }
 
     Serial.print("Tag trocada para:");
-    
-    
+
+
     lcd.clear();
     lcd.print("Tag trocada para:");
     lcd.setCursor(0, 1);

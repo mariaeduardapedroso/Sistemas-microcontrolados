@@ -378,12 +378,16 @@ void trocarTag() {
       tagEsperada[i] = mfrc522.uid.uidByte[i];
     }
 
+    Serial.print("Tag trocada para:");
+    
+    
     lcd.clear();
     lcd.print("Tag trocada para:");
     lcd.setCursor(0, 1);
 
     for (byte i = 0; i < sizeof(tagEsperada); i++) {
       lcd.print(tagEsperada[i], HEX);
+      Serial.println(tagEsperada[i], HEX);
     }
 
     delay(2000);  // Aguarda por 2 segundos para exibir a mensagem
